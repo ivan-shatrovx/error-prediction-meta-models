@@ -1,13 +1,10 @@
 
 # Trains 3 FLAML regression models to predict true pK (binding affinity)
 # using the same filtered feature set as the metamodels.
-
 # Three test set variants:
 #   Model 1 — CASF-2016 test set
 #   Model 2 — Zero ligand bias test set
 #   Model 3 — OOD test set
-
-# Features: same 207 from metamodel_outputs_final/metrics/feature_columns.txt
 
 from pathlib import Path
 
