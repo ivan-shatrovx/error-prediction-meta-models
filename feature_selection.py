@@ -1,9 +1,6 @@
 # Feature Selection
-#
 # Filters metamodel_input.csv down to the 207 features used for model training.
-
 # Output: metamodel_inputs_final.csv
-
 # Configuration
 from pathlib import Path
 
