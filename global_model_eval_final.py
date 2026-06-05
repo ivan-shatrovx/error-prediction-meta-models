@@ -1,12 +1,11 @@
-# %% [markdown]
-# # Global pK Model Evaluation (vfinal)
+
+# Global pK Model Evaluation (vfinal)
 #
 # Evaluates the 3 trained global pK models on their respective test sets.
 # Includes per-series breakdown, SHAP beeswarm plots, and corrected pK analysis.
-#
-# Conda environment: metamodels
 
-# %% Configuration
+
+# Configuration
 from pathlib import Path
 
 DATA_PATH     = Path.home() / "Desktop" / "merged_descriptors_predictions.csv"
@@ -24,7 +23,7 @@ OOD_CSV       = BENCHMARK_DIR / "index_oodtest.csv"
 print(f"Model dir: {MODEL_DIR}")
 print(f"Output:    {OUTPUT_DIR}")
 
-# %% Imports
+# Imports
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -45,12 +44,12 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 (OUTPUT_DIR / "shap").mkdir(exist_ok=True)
 print("Imports OK")
 
-# %% Load feature list
+# Load feature list
 with open(MODEL_DIR / "metrics" / "feature_columns.txt") as f:
     feature_columns = [line.strip() for line in f if line.strip()]
 print(f"Features: {len(feature_columns)}")
 
-# %% Load data and test sets
+# Load data and test sets
 print(f"\nLoading data ...")
 df = pd.read_csv(DATA_PATH)
 df = df.dropna(subset=[LABEL_COL]).reset_index(drop=True)
@@ -84,7 +83,7 @@ def preprocess(df_tr, df_te, imputer):
         return np.clip(X, -1e30, 1e30)
     return imputer.transform(_clean(df_tr)), imputer.transform(_clean(df_te))
 
-# %% Evaluate all models
+# Evaluate all models
 eval_rows = []
 all_results = {}
 
@@ -131,7 +130,7 @@ eval_df = pd.DataFrame(eval_rows)
 eval_df.to_csv(OUTPUT_DIR / "evaluation_summary.csv", index=False)
 print(f"\n✓ Summary saved")
 
-# %% Per-series breakdown (by protein_path if available)
+# Per-series breakdown (by protein_path if available)
 if "protein_path" in df.columns:
     series_rows = []
     for name, res in all_results.items():
@@ -151,7 +150,7 @@ if "protein_path" in df.columns:
     series_df.to_csv(OUTPUT_DIR / "per_series_evaluation.csv", index=False)
     print(f"✓ Per-series breakdown saved ({len(series_df)} series)")
 
-# %% Save full predictions
+# Save full predictions
 for name, res in all_results.items():
     pd.DataFrame({
         "unique_id": res["unique_ids"],
@@ -162,7 +161,7 @@ for name, res in all_results.items():
     }).to_csv(OUTPUT_DIR / f"{name}_predictions.csv", index=False)
 print(f"✓ Prediction CSVs saved")
 
-# %% Combined actual vs predicted (1×3)
+# Combined actual vs predicted plots
 names = list(all_results.keys())
 fig, axes = plt.subplots(1, len(names), figsize=(6 * len(names), 6))
 if len(names) == 1:
@@ -190,7 +189,7 @@ plt.savefig(OUTPUT_DIR / "all_models_actual_vs_predicted.png", dpi=150, bbox_inc
 plt.close()
 print("✓ Combined plot saved")
 
-# %% Error distribution per model
+# Error distribution per model
 fig, axes = plt.subplots(1, len(names), figsize=(6 * len(names), 5))
 if len(names) == 1:
     axes = [axes]
@@ -211,7 +210,7 @@ plt.savefig(OUTPUT_DIR / "error_distributions.png", dpi=150, bbox_inches='tight'
 plt.close()
 print("✓ Error distribution plot saved")
 
-# %% SHAP Analysis
+# SHAP Analysis plots
 SHAP_SAMPLE_SIZE     = 1000
 SHAP_BACKGROUND_SIZE = 100
 rng = np.random.default_rng(42)
@@ -292,7 +291,7 @@ for job in JOBS:
     except Exception as e:
         print(f"  ERROR (interventional): {e}")
 
-# %% Combined SHAP beeswarm — path-dependent, all 3 models side by side
+# Combined SHAP beeswarm — path-dependent, all 3 models side by side
 fig, axes = plt.subplots(1, len(names), figsize=(10 * len(names), 8))
 if len(names) == 1:
     axes = [axes]
@@ -332,12 +331,11 @@ plt.close()
 print(f"\n✓ Combined SHAP plot saved")
 print(f"\n✓ All done. Results in: {OUTPUT_DIR}")
 
-# %% Evaluate CASF-2016 global model on Ross FEP benchmark
+# Evaluate CASF-2016 global model on Ross FEP benchmark
 ROSS_CSV  = Path.home() / "Desktop" / "binding_free_energy_benchmark" / "ross_combined.csv"
 SDF_ROOT  = Path.home() / "Desktop" / "binding_free_energy_benchmark" / "fep_benchmark_inputs" / "structure_inputs"
 RT_LN10   = 1.3592  # kcal/mol at 297 K
 
-# --- Parse experimental dG from SDF files ---
 def parse_sdf_exp_dg(sdf_path, group, target):
     records = []
     with open(sdf_path) as f:
@@ -370,12 +368,11 @@ exp_dg_df = pd.DataFrame(exp_dg_records, columns=["unique_id", "exp_dG_kcal"])
 exp_dg_df["exp_pK"] = -exp_dg_df["exp_dG_kcal"] / RT_LN10
 print(f"Parsed {len(exp_dg_df)} experimental values from SDF files")
 
-# --- Load and merge Ross CSV ---
+# load in Ross FEP benchmark
 ross_df = pd.read_csv(ROSS_CSV)
 ross_df = ross_df.merge(exp_dg_df[["unique_id", "exp_pK"]], on="unique_id", how="left")
 print(f"Ross CSV: {len(ross_df)} rows, {ross_df['exp_pK'].notna().sum()} matched to exp_pK")
 
-# --- Remap unprefixed columns to prefixed training feature names ---
 PREFIXES = {"arp_", "dpk_", "rdk_"}
 col_remap = {}
 for fc in feature_columns:
@@ -395,7 +392,6 @@ X_ross_raw = ross_feat[feature_columns].to_numpy(dtype=np.float64, na_value=np.n
 X_ross_raw = np.where(np.isinf(X_ross_raw), np.nan, X_ross_raw)
 X_ross_raw = np.clip(X_ross_raw, -1e30, 1e30)
 
-# --- Load CASF-2016 model and its own imputer ---
 casf_model_path   = MODEL_DIR / "models" / "casf_2016_flaml_model.pkl"
 casf_imputer_path = MODEL_DIR / "models" / "casf_2016_imputer.joblib"
 
@@ -416,7 +412,6 @@ r_r, p_r = stats.pearsonr(exp_pK_ross[valid], y_pred_ross[valid])
 print(f"\nCASF-2016 model — Ross FEP benchmark  (n={valid.sum():,})")
 print(f"  R²={r2_r:.4f}   RMSE={rmse_r:.4f}   MAE={mae_r:.4f}   r={r_r:.4f}  (p={p_r:.2e})")
 
-# --- Per-target PCC and weighted mean PCC ---
 # unique_id format: {group}/{target}/{ligand} → series = "group/target"
 ross_df["pred_pK"]  = y_pred_ross
 ross_df["series"]   = ross_df["unique_id"].str.split("/").str[:2].str.join("/")
@@ -501,7 +496,7 @@ plt.savefig(OUTPUT_DIR / "casf2016_ross_per_target_pcc.png", dpi=150, bbox_inche
 plt.close()
 print(f"✓ Per-target PCC bar chart saved")
 
-# %% Global model vs AEV-PLIG — PCC comparison across 4 benchmarks
+# Global model vs AEV-PLIG — PCC comparison across 4 benchmarks
 import plotly.graph_objects as go
 
 # Global model PCC on each test set (from eval_df computed earlier in this script)
@@ -564,4 +559,3 @@ fig.write_html(str(out_html))
 fig.write_image(str(out_pdf))
 fig.show(renderer="browser")
 print(f"✓ Comparison chart saved: {out_html.name}  +  {out_pdf.name}")
-# %%
