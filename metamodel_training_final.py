@@ -1,55 +1,39 @@
-# %% [markdown]
-# # FLAML Metamodel Training Pipeline (vfinal — weighted errors only)
+
+# FLAML Metamodel Training Pipeline
 #
-# Trains regression metamodels to predict weighted directional and absolute errors
-# using the filtered feature set from metadata_inputs_final.csv.
+# Trains regression metamodels to predict weighted signed and absolute errors
+# using the filtered feature set from metadata_inputs_final.csv
 #
 # Targets: weighted_error, weighted_abs_error
 # Features: rdk_*, arp_*, dpk_* columns remaining after final filtering
-#
-# **Changes from 25_02 version:**
-# - Input: metamodel_inputs_final.csv (reduced, de-correlated feature set)
-# - Targets: weighted_error and weighted_abs_error only
-# - pred_error and pred_abs_error explicitly dropped after load (leakage guard)
-# - Plot layouts adjusted to 1×2
-#
-# **Conda environment:** `metamodels`
-# Activate with: `conda activate metamodels`
 
-# %% Configuration
+# Configuration
 import os
 from pathlib import Path
 
-# === File Paths ===
+# File Paths
 DATA_PATH = Path.home() / "Desktop" / "metamodel_inputs_final.csv"
 OUTPUT_DIR = Path.home() / "Desktop" / "metamodel_outputs_final"
 
-# === Target Variables ===
+# Target Variables
 TARGET_COLUMNS = [
     "weighted_error",
     "weighted_abs_error",
 ]
 
-# Columns to drop immediately after loading — closely related to targets, would contaminate model
+# Columns to drop immediately after loading
 LEAKAGE_COLUMNS = ["pred_error", "pred_abs_error"]
 
-# === Feature Prefixes (columns to use as features) ===
+# Prefixes 
 FEATURE_PREFIXES = ("rdk_", "arp_", "dpk_")
 
-# === Columns to Exclude ===
+# Columns to Exclude 
 EXCLUDE_COLUMNS = [
     "unique_id", "dataset", "protein_path", "ligand_path", "pred_fold",
     "pred_pred_pK", "pred_true_pK"
 ] + [f"pred_pred_{i}" for i in range(10)]
 
-# === Training Parameters ===
-# Time budget per model in seconds
-# Recommendations for ~100k rows with many features:
-#   - Quick test: 300 (5 min)
-#   - Good quality: 1800 (30 min)
-#   - High quality: 3600 (1 hour)
-#   - Overnight: 7200 (2 hours)
-TIME_BUDGET_SECONDS = 1800  # 30 minutes per model - adjust as needed
+TIME_BUDGET_SECONDS = 1800  # 30 minutes per model 
 
 # Holdout test set proportion
 TEST_SIZE = 0.10
@@ -66,9 +50,9 @@ VERBOSE = 2
 # Memory limit in MB (set based on your 32GB RAM)
 MEMORY_LIMIT_MB = 28000  # Leave ~4GB for system
 
-# === Estimator List (let FLAML choose, but you can restrict if needed) ===
+# Estimator List (auto is FLAML default)
 # Options: 'lgbm', 'xgboost', 'xgb_limitdepth', 'rf', 'extra_tree', 'catboost'
-ESTIMATOR_LIST = "auto"  # or e.g., ['lgbm', 'xgboost', 'rf']
+ESTIMATOR_LIST = "auto"  
 
 print(f"Configuration loaded:")
 print(f"  Data path: {DATA_PATH}")
@@ -77,7 +61,7 @@ print(f"  Time budget: {TIME_BUDGET_SECONDS}s per model ({TIME_BUDGET_SECONDS/60
 print(f"  Test size: {TEST_SIZE*100:.0f}%")
 print(f"  CV folds: {N_SPLITS}")
 
-# %% Imports
+# Imports
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -101,7 +85,7 @@ sns.set_palette("husl")
 print("All imports successful!")
 print(f"FLAML version: {__import__('flaml').__version__}")
 
-# %% Create Output Directory
+# Create Output Directory
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 print(f"Output directory created/verified: {OUTPUT_DIR}")
 
@@ -111,12 +95,11 @@ print(f"Output directory created/verified: {OUTPUT_DIR}")
 (OUTPUT_DIR / "feature_importance").mkdir(exist_ok=True)
 (OUTPUT_DIR / "logs").mkdir(exist_ok=True)
 
-# %% Load and Explore Data
+# Load and Explore Data
 print(f"\nLoading data from: {DATA_PATH}")
 df = pd.read_csv(DATA_PATH)
 
-# Drop leakage columns immediately — pred_error/pred_abs_error are correlated
-# with the targets and must not be available during training
+# Drop leakage columns 
 leakage_present = [c for c in LEAKAGE_COLUMNS if c in df.columns]
 if leakage_present:
     df = df.drop(columns=leakage_present)
@@ -134,7 +117,7 @@ if missing_targets:
     raise ValueError(f"Missing target columns: {missing_targets}")
 print(f"\n✓ All {len(TARGET_COLUMNS)} target columns found")
 
-# %% Feature Selection
+# Feature Selection
 print(f"\n{'='*60}")
 print("FEATURE SELECTION")
 print(f"{'='*60}")
@@ -161,7 +144,7 @@ if overlap:
     raise ValueError(f"Target columns found in features: {overlap}")
 print("✓ No overlap between features and targets")
 
-# %% Data Preprocessing
+# Data Preprocessing
 print(f"\n{'='*60}")
 print("DATA PREPROCESSING")
 print(f"{'='*60}")
@@ -205,7 +188,7 @@ assert not np.any(np.isnan(X.values)), "NaN values remain after preprocessing!"
 assert not np.any(np.isinf(X.values)), "Inf values remain after preprocessing!"
 print(f"\nFinal feature matrix: {X.shape} — no NaN, no inf ✓")
 
-# %% Train-Test Split
+# Train-Test Split
 print(f"\n{'='*60}")
 print("TRAIN-TEST SPLIT")
 print(f"{'='*60}")
@@ -222,7 +205,7 @@ print(f"Test set: {len(X_test):,} samples ({TEST_SIZE*100:.0f}%)")
 np.save(OUTPUT_DIR / "metrics" / "test_indices.npy", indices_test.values)
 print("✓ Test indices saved")
 
-# %% Define Training Functions
+# Define Training Functions
 def train_metamodel(
     X_train: pd.DataFrame,
     y_train: pd.Series,
@@ -389,7 +372,7 @@ def plot_actual_vs_predicted(
 
     print(f"  Plot saved: {save_path.name}")
 
-# %% Train All Models
+# Train All Models
 print(f"\n{'#'*60}")
 print("# STARTING TRAINING PIPELINE")
 print(f"# Total models to train: {len(TARGET_COLUMNS)}")
@@ -441,7 +424,7 @@ print("# PIPELINE COMPLETE")
 print(f"# Total duration: {total_duration:.1f}s ({total_duration/60:.1f} min)")
 print(f"{'#'*60}")
 
-# %% Summary Metrics Table
+# Summary Metrics Table
 print(f"\n{'='*60}")
 print("SUMMARY: MODEL COMPARISON")
 print(f"{'='*60}\n")
@@ -468,7 +451,7 @@ with open(summary_txt_path, 'w') as f:
     f.write(f"\n\n{'='*80}\n")
     f.write(f"Total pipeline duration: {total_duration:.1f}s ({total_duration/60:.1f} min)\n")
 
-# %% Combined Visualization (1×2 — two targets)
+# Combined Visualization 
 fig, axes = plt.subplots(1, 2, figsize=(14, 7))
 
 for i, target in enumerate(TARGET_COLUMNS):
@@ -504,7 +487,7 @@ plt.savefig(combined_path, dpi=150, bbox_inches='tight')
 plt.close()
 print(f"✓ Combined plot saved: {combined_path}")
 
-# %% Feature Importance Visualization (1×2 — two targets)
+# Feature Importance Visualization 
 fig, axes = plt.subplots(1, 2, figsize=(14, 8))
 
 for i, target in enumerate(TARGET_COLUMNS):
@@ -531,7 +514,7 @@ plt.savefig(fi_plot_path, dpi=150, bbox_inches='tight')
 plt.close()
 print(f"✓ Feature importance plot saved: {fi_plot_path}")
 
-# %% Save Metadata
+# Save Metadata
 metadata = {
     "data_path": str(DATA_PATH),
     "output_dir": str(OUTPUT_DIR),
@@ -560,7 +543,7 @@ with open(feature_list_path, 'w') as f:
     f.write('\n'.join(feature_columns))
 print(f"✓ Feature list saved: {feature_list_path}")
 
-# %% Final Summary
+# Final Summary
 print(f"\n\n{'#'*60}")
 print("# TRAINING COMPLETE - OUTPUT SUMMARY")
 print(f"{'#'*60}")
@@ -587,14 +570,8 @@ print(f"\nlogs/")
 for target in TARGET_COLUMNS:
     print(f"   ├── {target}_flaml.log")
 
-# %% Load pK columns from merged_descriptors_predictions.csv
-"""
-Load pred_pred_pK (model's predicted pK) and pred_true_pK (experimental pK)
-to use as additional features in models 3-6.
+# Load pK columns from merged_descriptors_predictions.csv
 
-merged_descriptors_predictions.csv has the same 96,950 rows in the same order
-as metamodel_inputs_final.csv — both derived from the same pipeline run.
-"""
 MERGED_PATH = Path.home() / "Desktop" / "merged_descriptors_predictions.csv"
 
 print(f"\nLoading pK columns from: {MERGED_PATH}")
@@ -642,7 +619,7 @@ with open(true_pk_feature_list_path, 'w') as f:
     f.write('\n'.join(feature_columns_true_pk))
 print(f"✓ Feature list (true_pk) saved: {true_pk_feature_list_path}")
 
-# %% Train Models 3 & 4 — features + pred_pK
+# Train Models 3 & 4 — features + pred_pK
 print(f"\n{'#'*60}")
 print("# TRAINING PIPELINE: FEATURES + PRED_PK (models 3-4)")
 print(f"{'#'*60}")
@@ -690,7 +667,7 @@ pipeline_end_pred_pk = datetime.now()
 duration_pred_pk = (pipeline_end_pred_pk - pipeline_start_pred_pk).total_seconds()
 print(f"\n# Pipeline (pred_pk) complete: {duration_pred_pk:.1f}s ({duration_pred_pk/60:.1f} min)")
 
-# %% Train Models 5 & 6 — features + true_pK
+# Train Models 5 & 6 — features + true_pK
 print(f"\n{'#'*60}")
 print("# TRAINING PIPELINE: FEATURES + TRUE_PK (models 5-6)")
 print(f"{'#'*60}")
@@ -738,7 +715,7 @@ pipeline_end_true_pk = datetime.now()
 duration_true_pk = (pipeline_end_true_pk - pipeline_start_true_pk).total_seconds()
 print(f"\n# Pipeline (true_pk) complete: {duration_true_pk:.1f}s ({duration_true_pk/60:.1f} min)")
 
-# %% Combined Summary — All 6 Models
+# Combined Summary — All 6 Models
 print(f"\n{'='*60}")
 print("SUMMARY: ALL 6 MODELS")
 print(f"{'='*60}\n")
@@ -757,7 +734,7 @@ summary_all_path = OUTPUT_DIR / "metrics" / "all_models_summary.csv"
 summary_all_df.to_csv(summary_all_path, index=False)
 print(f"\n✓ Combined summary saved: {summary_all_path}")
 
-# %% Combined Actual vs Predicted — All 6 Models (3×2 grid)
+# Combined Actual vs Predicted — All 6 Models 
 fig, axes = plt.subplots(3, 2, figsize=(14, 18))
 
 variants = [
@@ -794,7 +771,7 @@ plt.savefig(all6_plot_path, dpi=150, bbox_inches='tight')
 plt.close()
 print(f"✓ All-6 plot saved: {all6_plot_path}")
 
-# %% Feature Importance — All 6 Models (3×2 grid)
+# Feature Importance — All 6 Models (3×2 grid)
 fig, axes = plt.subplots(3, 2, figsize=(16, 22))
 
 fi_variants = [
@@ -825,7 +802,7 @@ plt.savefig(fi_all_path, dpi=150, bbox_inches='tight')
 plt.close()
 print(f"✓ All-6 feature importance plot saved: {fi_all_path}")
 
-# %% SHAP Analysis — All 6 Models (path-dependent + interventional)
+# SHAP Analysis — All 6 Models (path-dependent + interventional)
 """
 Path-dependent (default TreeExplainer):
   - Exact for trees, fast
@@ -930,7 +907,7 @@ for variant_label, models_dict, X_shap, X_bg, feat_names in shap_variants:
         except Exception as e:
             print(f"  ERROR computing SHAP for {model_tag}: {e}")
 
-# Combined summary plot — weighted_error across all 3 variants (1×3)
+# Combined summary plot — weighted_error 
 # shap.summary_plot (plot_type='dot') is the beeswarm equivalent and supports subplots
 fig, axes = plt.subplots(1, 3, figsize=(24, 8))
 for col, (variant_label, models_dict, X_shap, X_bg, feat_names) in enumerate(shap_variants):
