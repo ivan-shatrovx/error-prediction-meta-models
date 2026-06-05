@@ -1,19 +1,11 @@
-# %% [markdown]
-# # Metamodel Evaluation on Ross FEP Benchmark — All 6 Models
-#
+
+# Metamodel Evaluation on Ross FEP Benchmark — All 6 Models
 # Evaluates all 6 trained metamodels on the Ross FEP benchmark (ross_combined.csv):
-#   - features only          (models 1-2)
-#   - features + pred_pK     (models 3-4)  pred_pK = ross_combined['preds']
-#   - features + true_pK     (models 5-6)  true_pK = preds - error (reconstructed)
-#
 # ross_combined.csv uses unprefixed column names (e.g. "proximal", "TPSA", "ALA").
 # Training used prefixed names (arp_proximal, rdk_TPSA, dpk_ALA). Remapped automatically.
-#
-# Ground truth error: ross_combined['error'] = preds - exp_pK
-#
-# Conda environment: metamodels
 
-# %% Configuration
+
+# Configuration
 from pathlib import Path
 
 ROSS_CSV   = Path.home() / "Desktop" / "binding_free_energy_benchmark" / "ross_combined.csv"
@@ -27,7 +19,7 @@ print(f"Ross CSV:  {ROSS_CSV}")
 print(f"Model dir: {MODEL_DIR}")
 print(f"Output:    {OUTPUT_DIR}")
 
-# %% Imports
+# Imports
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -46,7 +38,7 @@ sns.set_palette("husl")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 print("Imports OK")
 
-# %% Load feature lists and imputer
+# Load feature lists and imputer
 def load_feature_list(path):
     with open(path) as f:
         return [line.strip() for line in f if line.strip()]
@@ -61,7 +53,7 @@ print(f"Base features:     {len(feature_list_base)}")
 print(f"+ pred_pk features:{len(feature_list_pred_pk)}")
 print(f"+ true_pk features:{len(feature_list_true_pk)}")
 
-# %% Load ross_combined.csv
+# Load ross_combined.csv
 print(f"\nLoading {ROSS_CSV} ...")
 df = pd.read_csv(ROSS_CSV)
 print(f"Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
@@ -69,11 +61,7 @@ print(f"Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
 if "preds" not in df.columns:
     raise ValueError("Expected column 'preds' not found in ross_combined.csv")
 
-# %% Parse experimental dG from SDF files
-# The 'error' column in ross_combined.csv is the arpeggio pipeline error message,
-# not prediction error. Experimental dG is stored as r_exp_dg in the SDF files.
-# unique_id format: {group}/{target}/{ligand_name}
-# SDF path: fep_benchmark_inputs/structure_inputs/{group}/{target}_ligands.sdf
+# Parse experimental dG from SDF files
 BENCHMARK_DIR = Path.home() / "Desktop" / "binding_free_energy_benchmark"
 SDF_ROOT      = BENCHMARK_DIR / "fep_benchmark_inputs" / "structure_inputs"
 RT_LN10       = 1.3592  # kcal/mol at 297 K  (= R * T * ln10 = 0.5902 * 2.3026)
@@ -125,7 +113,7 @@ print(f"  Matched {n_matched}/{len(df)} rows in ross_combined.csv")
 df["pred_error"] = df["preds"] - df["exp_pK"]
 print(f"  pred_error: mean={df['pred_error'].mean():.3f}  std={df['pred_error'].std():.3f}")
 
-# %% Build column remap (unprefixed → prefixed)
+# Build column remap (unprefixed → prefixed)
 col_remap = {}
 for train_col in feature_list_base:
     for prefix in PREFIXES:
@@ -142,7 +130,7 @@ print(f"\nFeature coverage: {len(feature_list_base)-len(missing)}/{len(feature_l
 for c in missing:
     df_feat[c] = np.nan
 
-# %% Preprocess base feature matrix (same pipeline as training)
+# Preprocess base feature matrix (same pipeline as training)
 X_raw = df_feat[feature_list_base].to_numpy(dtype=np.float64, na_value=np.nan)
 X_raw = np.where(np.isinf(X_raw), np.nan, X_raw)
 X_raw = np.clip(X_raw, -1e30, 1e30)
@@ -153,14 +141,14 @@ print(f"Base feature matrix: {X_base.shape} — no NaN ✓")
 X_pred_pk = np.hstack([X_base, df["preds"].values.reshape(-1, 1)])
 X_true_pk = np.hstack([X_base, df["exp_pK"].values.reshape(-1, 1)])
 
-# %% Define model variants
+# Define model variants
 VARIANTS = [
     ("features_only",    TARGET_COLUMNS,                          X_base,     feature_list_base,     "steelblue"),
     ("features+pred_pk", [f"{t}_pred_pk" for t in TARGET_COLUMNS], X_pred_pk, feature_list_pred_pk,  "darkorange"),
     ("features+true_pk", [f"{t}_true_pk" for t in TARGET_COLUMNS], X_true_pk, feature_list_true_pk,  "seagreen"),
 ]
 
-# %% Run inference for all 6 models
+# Run inference for all 6 models
 print(f"\n{'='*60}")
 print("INFERENCE — ALL 6 MODELS")
 print(f"{'='*60}")
@@ -179,7 +167,7 @@ for variant_label, model_tags, X_variant, feat_list, color in VARIANTS:
         all_results[variant_label][target] = y_pred
         print(f"  {model_tag}: mean={y_pred.mean():.3f}  std={y_pred.std():.3f}")
 
-# %% Evaluate all 6 models
+# Evaluate all 6 models
 actual_error = df["pred_error"].values
 exp_pK_vals  = df["exp_pK"].values
 preds_orig   = df["preds"].values
@@ -236,7 +224,7 @@ eval_path = OUTPUT_DIR / "all_6_models_evaluation.csv"
 eval_df.to_csv(eval_path, index=False)
 print(f"\n✓ Evaluation table saved: {eval_path}")
 
-# %% Per-series breakdown (weighted_error only)
+# Per-series breakdown (weighted_error only)
 if "subset" in df.columns or "target" in df.columns:
     series_col = "target" if "target" in df.columns else "subset"
     series_rows = []
@@ -270,7 +258,7 @@ if "subset" in df.columns or "target" in df.columns:
     series_df.to_csv(series_path, index=False)
     print(f"✓ Per-series breakdown saved: {series_path}")
 
-# %% Save predictions
+# Save predictions
 out_cols = [c for c in ["unique_id", "preds", "exp_pK", "pred_error"] if c in df.columns]
 pred_out = df[out_cols].copy()
 for variant_label, _, _, _, _ in VARIANTS:
@@ -283,7 +271,7 @@ pred_out_path = OUTPUT_DIR / "ross_all_6_predictions.csv"
 pred_out.to_csv(pred_out_path, index=False)
 print(f"✓ All predictions saved: {pred_out_path}")
 
-# %% Plot 1: Predicted vs actual error — all 6 (3×2 grid)
+# Plot 1: Predicted vs actual error — all 6 (3×2 grid)
 fig, axes = plt.subplots(3, 2, figsize=(14, 18))
 
 for row, (variant_label, _, _, _, color) in enumerate(VARIANTS):
@@ -318,7 +306,7 @@ plt.savefig(OUTPUT_DIR / "all_6_pred_vs_error.png", dpi=150, bbox_inches='tight'
 plt.close()
 print(f"✓ Plot saved: all_6_pred_vs_error.png")
 
-# %% Plot 2: Corrected vs uncorrected pK (weighted_error models only, 1×3)
+# Plot 2: Corrected vs uncorrected pK (weighted_error models only, 1×3)
 fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 valid_pk = ~np.isnan(exp_pK_vals)
 
@@ -349,4 +337,4 @@ plt.close()
 print(f"✓ Plot saved: corrected_vs_uncorrected_pK.png")
 
 print(f"\n✓ Done. All results in: {OUTPUT_DIR}")
-# %%
+
