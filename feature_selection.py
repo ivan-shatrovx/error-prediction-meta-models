@@ -1,25 +1,22 @@
 # Feature Selection
 #
 # Filters metamodel_input.csv down to the 207 features used for model training.
-# Two steps:
-#   1. Drop manually specified columns (correlated, redundant, or leaking)
-#   2. Drop invalid columns (non-numeric, constant, or extreme values)
-#
+
 # Output: metamodel_inputs_final.csv
 
-# %% Configuration
+# Configuration
 from pathlib import Path
 
 INPUT_PATH  = Path.home() / "Desktop" / "metamodel_input.csv"
 OUTPUT_PATH = Path.home() / "Desktop" / "metamodel_inputs_final.csv"
 
-# %% Imports
+# Imports
 import pandas as pd
 
 df = pd.read_csv(INPUT_PATH)
 print(f"Loaded: {df.shape[0]:,} rows × {df.shape[1]} columns")
 
-# %% Step 1 — Drop manually specified columns
+# Step 1 — Drop manually specified columns
 COLS_TO_DROP = [
     'pred_0', 'pred_1', 'pred_2', 'pred_3', 'pred_4',
     'pred_5', 'pred_6', 'pred_7', 'pred_8', 'pred_9',
@@ -53,7 +50,7 @@ COLS_TO_DROP = [
 df = df.drop(columns=COLS_TO_DROP, errors="ignore")
 print(f"After manual drop: {df.shape[1]} columns")
 
-# %% Step 2 — Drop invalid columns (non-numeric, constant, or extreme values)
+# Step 2 — Drop invalid columns (non-numeric, constant, or extreme values)
 def get_invalid_columns(df):
     invalid = {}
     for col in df.columns:
@@ -74,7 +71,7 @@ if invalid_columns:
     print(f"Dropping {len(invalid_columns)} invalid columns: {list(invalid_columns.keys())}")
 df = df.drop(columns=invalid_columns.keys())
 
-# %% Save
+# Save
 print(f"\nFinal shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
 for prefix in ['arp', 'dpk', 'rdk']:
     n = sum(1 for c in df.columns if c.startswith(prefix + '_'))
@@ -82,4 +79,4 @@ for prefix in ['arp', 'dpk', 'rdk']:
 
 df.to_csv(OUTPUT_PATH, index=False)
 print(f"\n✓ Saved to {OUTPUT_PATH}")
-# %%
+
