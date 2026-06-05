@@ -1,21 +1,14 @@
-# %% [markdown]
-# # Global pK Prediction Model Training (vfinal)
-#
+
 # Trains 3 FLAML regression models to predict true pK (binding affinity)
 # using the same filtered feature set as the metamodels.
-#
+
 # Three test set variants:
 #   Model 1 — CASF-2016 test set
 #   Model 2 — Zero ligand bias test set
-#   Model 3 — OOD test set (split column in index_oodtest.csv)
-#
-# Features: same 207 from metamodel_outputs_final/metrics/feature_columns.txt
-# Label: pred_true_pK from merged_descriptors_predictions.csv
-# Contaminating columns dropped: pred_error, pred_abs_error, pred_pred_*, pred_pred_pK
-#
-# Conda environment: metamodels
+#   Model 3 — OOD test set
 
-# %% Configuration
+# Features: same 207 from metamodel_outputs_final/metrics/feature_columns.txt
+
 from pathlib import Path
 
 DATA_PATH       = Path.home() / "Desktop" / "merged_descriptors_predictions.csv"
@@ -38,9 +31,9 @@ CONTAMINATING_COLS = (
     + [f"pred_pred_{i}" for i in range(10)]
 )
 
-# === Training Parameters (match metamodel settings) ===
+# Training Parameters (match meta-model settings)
 TIME_BUDGET_SECONDS = 1800
-TEST_SIZE           = None   # not used — test set is externally defined
+TEST_SIZE           = None   # test set is externally defined
 N_SPLITS            = 5
 RANDOM_STATE        = 42
 VERBOSE             = 2
@@ -51,7 +44,6 @@ print(f"  Data:       {DATA_PATH}")
 print(f"  Output:     {OUTPUT_DIR}")
 print(f"  Time budget:{TIME_BUDGET_SECONDS}s per model ({TIME_BUDGET_SECONDS/60:.0f} min)")
 
-# %% Imports
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -79,12 +71,10 @@ for sub in ["models", "metrics", "plots", "feature_importance", "logs", "shap"]:
 print(f"FLAML version: {__import__('flaml').__version__}")
 print("Imports OK")
 
-# %% Load feature list
 with open(FEATURE_LIST) as f:
     feature_columns = [line.strip() for line in f if line.strip()]
 print(f"Feature list loaded: {len(feature_columns)} features")
 
-# %% Load data
 print(f"\nLoading {DATA_PATH} ...")
 df = pd.read_csv(DATA_PATH)
 print(f"Shape: {df.shape[0]:,} rows × {df.shape[1]} columns")
@@ -104,7 +94,6 @@ if label_nan > 0:
 
 print(f"  Label mean={df[LABEL_COL].mean():.3f}  std={df[LABEL_COL].std():.3f}")
 
-# %% Load test set PDB code lists
 casf_ids     = set(pd.read_csv(CASF_CSV)["key"].astype(str))
 zero_ids     = set(pd.read_csv(ZERO_BIAS_CSV)["key"].astype(str))
 
@@ -121,7 +110,6 @@ for label, ids in [("CASF", casf_ids), ("Zero bias", zero_ids), ("OOD", ood_test
     n = df[ID_COL].isin(ids).sum()
     print(f"  {label} rows in data: {n:,}")
 
-# %% Preprocessing helper
 def preprocess_features(df_train, df_test, feature_cols):
     """Convert to numpy, replace inf, clip, impute with median fitted on train only."""
     def _to_clean_array(frame):
@@ -139,7 +127,6 @@ def preprocess_features(df_train, df_test, feature_cols):
 
     return X_tr, X_te, imputer
 
-# %% Training + evaluation helpers (same as metamodel script)
 def train_model(X_train, y_train, model_name):
     print(f"\n{'='*60}")
     print(f"TRAINING: {model_name}")
@@ -227,7 +214,6 @@ def plot_actual_vs_predicted(y_true, y_pred, model_name, metrics, save_path):
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close()
 
-# %% Define the three training jobs
 JOBS = [
     {
         "name":     "casf_2016",
@@ -246,7 +232,6 @@ JOBS = [
     },
 ]
 
-# %% Train all 3 models
 all_metrics = []
 all_predictions = {}
 all_feature_importance = {}
@@ -325,7 +310,7 @@ print(f"\n\n{'#'*60}")
 print(f"# ALL MODELS COMPLETE — {total_duration:.0f}s ({total_duration/60:.1f} min)")
 print(f"{'#'*60}")
 
-# %% Summary table
+# Summary table
 summary_df = pd.DataFrame(all_metrics)
 summary_df = summary_df[['model', 'best_estimator', 'r2', 'rmse', 'mae', 'pearson_r', 'best_cv_rmse', 'n_test']]
 print(f"\n{'='*60}")
@@ -335,7 +320,7 @@ print(summary_df.to_string(index=False))
 summary_df.to_csv(OUTPUT_DIR / "metrics" / "all_models_summary.csv", index=False)
 print(f"\n✓ Summary saved")
 
-# %% Combined actual vs predicted (1×3)
+# Summary Plots
 fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 for i, (name, preds) in enumerate(all_predictions.items()):
     ax = axes[i]
@@ -359,7 +344,7 @@ plt.savefig(OUTPUT_DIR / "plots" / "all_models_comparison.png", dpi=150, bbox_in
 plt.close()
 print("✓ Combined plot saved")
 
-# %% Feature importance (1×3)
+# Feature importance plots
 fig, axes = plt.subplots(1, 3, figsize=(18, 9))
 for i, name in enumerate(all_predictions.keys()):
     ax = axes[i]
@@ -381,7 +366,7 @@ plt.savefig(OUTPUT_DIR / "plots" / "feature_importance_comparison.png", dpi=150,
 plt.close()
 print("✓ Feature importance plot saved")
 
-# %% Save feature list and metadata
+# Save feature list and metadata
 with open(OUTPUT_DIR / "metrics" / "feature_columns.txt", 'w') as f:
     f.write('\n'.join(feature_columns))
 
@@ -401,7 +386,7 @@ with open(OUTPUT_DIR / "metrics" / "training_metadata.json", 'w') as f:
     json.dump(metadata, f, indent=2)
 print("✓ Metadata saved")
 
-# %% SHAP Analysis — all 3 models
+# SHAP Analysis — all 3 models
 import shap
 
 SHAP_SAMPLE_SIZE     = 1000
@@ -494,4 +479,4 @@ for job in JOBS:
         print(f"  ERROR (interventional): {e}")
 
 print(f"\n✓ All done. Outputs in: {OUTPUT_DIR}")
-# %%
+
